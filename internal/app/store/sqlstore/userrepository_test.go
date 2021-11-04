@@ -1,29 +1,32 @@
-package store_test
+package sqlstore_test
 
 import (
 	"github.com/stretchr/testify/assert"
 	"rest_app/internal/app/model"
 	"rest_app/internal/app/store"
+	"rest_app/internal/app/store/sqlstore"
 	"testing"
 )
 
 func TestUserRepository_Create(t *testing.T) {
-	s, teardown := store.TestStore(t, databaseURL)
+	db, teardown := sqlstore.TestDB(t, databaseURL)
 	defer teardown("users")
+	s := sqlstore.New(db)
 
-	u, err := s.User().Create(model.TestUser(t))
-	assert.NoError(t, err) // нет ошибки
-	assert.NotNil(t, u)    // юзер не nil
+	u := model.TestUser(t)
+	assert.NoError(t, s.User().Create(u)) // нет ошибки
+	assert.NotNil(t, u)                   // юзер не nil
 }
 
 func TestUserRepository_FindByEmail(t *testing.T) {
-	s, teardown := store.TestStore(t, databaseURL)
+	db, teardown := sqlstore.TestDB(t, databaseURL)
 	defer teardown("users")
+	s := sqlstore.New(db)
 
 	email := "users@examples.org"
 	// кейс: пытаемся найти юзера не существующего в бд и получаем ошибку
 	_, err := s.User().FindByEmail(email)
-	assert.Error(t, err)
+	assert.EqualError(t, err, store.ErrRecordNotFound.Error())
 
 	// кейс: польз-ль существует в бд и все хорошо
 	u := model.TestUser(t)
