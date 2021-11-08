@@ -64,6 +64,7 @@ func (s *server) configureRouter() {
 	private.HandleFunc("/whoami", s.handleWhoami())
 }
 
+// middleware для логирования запросов
 func (s *server) logRequest(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		logger := s.logger.WithFields(logrus.Fields{
