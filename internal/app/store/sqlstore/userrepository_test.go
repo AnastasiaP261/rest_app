@@ -23,16 +23,28 @@ func TestUserRepository_FindByEmail(t *testing.T) {
 	defer teardown("users")
 	s := sqlstore.New(db)
 
-	email := "users@examples.org"
 	// кейс: пытаемся найти юзера не существующего в бд и получаем ошибку
-	_, err := s.User().FindByEmail(email)
+	u := model.TestUser(t)
+	_, err := s.User().FindByEmail(u.Email)
 	assert.EqualError(t, err, store.ErrRecordNotFound.Error())
 
 	// кейс: польз-ль существует в бд и все хорошо
-	u := model.TestUser(t)
-	u.Email = email
 	s.User().Create(u)
-	u, err = s.User().FindByEmail(email)
+	u, err = s.User().FindByEmail(u.Email)
+	assert.NoError(t, err)
+	assert.NotNil(t, u)
+}
+
+func TestUserRepository_Find(t *testing.T) {
+	db, teardown := sqlstore.TestDB(t, databaseURL)
+	defer teardown("users")
+
+	s := sqlstore.New(db)
+
+	// кейс: польз-ль существует в бд и все хорошо
+	u := model.TestUser(t)
+	s.User().Create(u)
+	u, err := s.User().Find(u.Id)
 	assert.NoError(t, err)
 	assert.NotNil(t, u)
 }
