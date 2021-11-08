@@ -8,9 +8,11 @@ import (
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
+	"github.com/sirupsen/logrus"
 	"net/http"
 	"rest_app/internal/app/model"
 	"rest_app/internal/app/store"
+	"time"
 )
 
 var (
@@ -28,6 +30,7 @@ const (
 
 type server struct {
 	router       *mux.Router
+	logger       *logrus.Logger
 	store        store.Store
 	sessionStore sessions.Store
 }
@@ -35,6 +38,7 @@ type server struct {
 func newServer(store store.Store, sessionStore sessions.Store) *server {
 	s := &server{
 		router:       mux.NewRouter(),
+		logger:       logrus.New(),
 		store:        store,
 		sessionStore: sessionStore,
 	}
@@ -50,6 +54,7 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) configureRouter() {
 	s.router.Use(s.setRequestID)
+	s.router.Use(s.logRequest)
 	s.router.Use(handlers.CORS(handlers.AllowedOrigins([]string{"*"})))
 	s.router.HandleFunc("/users", s.handleUsersCreate()).Methods("POST")
 	s.router.HandleFunc("/sessions", s.handleSessionsCreate()).Methods("POST")
@@ -59,6 +64,28 @@ func (s *server) configureRouter() {
 	private.HandleFunc("/whoami", s.handleWhoami())
 }
 
+func (s *server) logRequest(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		logger := s.logger.WithFields(logrus.Fields{
+			"remote_addr": r.RemoteAddr, // адрес клиента
+			"request_id":  r.Context().Value(ctxKeyRequestID),
+		})
+		// started GET /blabla
+		logger.Infof("started %s %s", r.Method, r.RequestURI)
+
+		start := time.Now() // время когда мы начали обработку запроса
+		rw := &responseWriter{w, http.StatusOK}
+		next.ServeHTTP(rw, r)
+
+		logger.Infof(
+			"completed with %d %s in %v",
+			rw.code,
+			http.StatusText(rw.code),
+			time.Now().Sub(start),
+		)
+	})
+}
+
 // для установки ид запроса
 func (s *server) setRequestID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -66,7 +93,6 @@ func (s *server) setRequestID(next http.Handler) http.Handler {
 		w.Header().Set("X-Request-ID", id)
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), ctxKeyRequestID, id)))
 	})
-
 }
 
 func (s *server) authenticateUser(next http.Handler) http.Handler {
